@@ -18,8 +18,7 @@ const serveHotApi: (port?: number) => void = (port: number = config.PORT) => {
   }
 };
 
-if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "docker") {
-  serveHotApi(config.PORT);
-}
+// 强制启动服务器用于开发
+serveHotApi(config.PORT);
 
 export default serveHotApi;

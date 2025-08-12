@@ -6,7 +6,7 @@ services:
       target: runner
     image: dailyhotapi-sga:latest
     ports:
-      - "6688:6688"
+      - "6699:6688"  # 使用不同端口避免冲突
     volumes:
       - "./logs:/app/logs"
     environment:
@@ -26,32 +26,18 @@ services:
     depends_on:
       - redis
     networks:
-      - dailyhot-network
-
-  # 前端服务
-  frontend:
-    build:
-      context: ./dailyhot-fronted
-      dockerfile: Dockerfile
-    image: dailyhot-frontend:latest
-    ports:
-      - "3000:80"
-    restart: always
-    depends_on:
-      - backend
-    networks:
-      - dailyhot-network
+      - dailyhot-test-network
 
   # Redis缓存服务
   redis:
     image: redis:7-alpine
     restart: always
     ports:
-      - "6379:6379"
+      - "6380:6379"  # 使用不同端口避免冲突
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     networks:
-      - dailyhot-network
+      - dailyhot-test-network
 
 networks:
-  dailyhot-network:
+  dailyhot-test-network:
     driver: bridge

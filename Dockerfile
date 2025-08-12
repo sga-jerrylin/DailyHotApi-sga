@@ -11,12 +11,12 @@ FROM base AS builder
 RUN npm install -g pnpm
 WORKDIR /app
 
-COPY package*json tsconfig.json pnpm-lock.yaml .env.example ./
+COPY package*json tsconfig.json pnpm-lock.yaml .env.example .env.docker ./
 COPY src ./src
 COPY public ./public
 
-# 复制环境变量
-RUN [ ! -e ".env" ] && cp .env.example .env || true
+# 复制环境变量 - 优先使用Docker配置
+RUN [ ! -e ".env" ] && cp .env.docker .env || true
 
 # 安装依赖
 RUN pnpm install
