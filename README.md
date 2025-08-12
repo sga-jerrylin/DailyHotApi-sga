@@ -1,5 +1,4 @@
 <div align="center">
-<img alt="SGA Logo" height="120" src="./readme.png" width="120"/>
 <h1>🌟 SGA DailyHot AI 热点监控平台</h1>
 <p>基于 AI 驱动的中文热点聚合监控平台 | 35个数据源 | DeepSeek AI 深度分析</p>
 <br />
@@ -10,7 +9,6 @@
 <img src="https://img.shields.io/badge/AI-DeepSeek-blue" alt="AI Powered"/>
 </div>
 
-![SGA DailyHot AI Platform](./ChatGPT%20Image%202025年7月1日%2000_25_11.png)
 
 ## ✨ 核心特性
 
@@ -25,7 +23,7 @@
 
 ### 🖼️ 界面预览
 
-![星辰大海主题界面](./微信图片_20250701000820.jpg)
+![星辰大海主题界面](./readme.png)
 
 **特色功能展示:**
 - 🌌 **星辰大海动画** - 120个星星闪烁 + 3个流星轨迹 + 3个星云浮动
