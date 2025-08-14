@@ -39,118 +39,84 @@ app.use(
   }),
 );
 
-// API路由 - 必须在静态资源之前
-app.route("/", registry);
-
-// robots
-app.get("/robots.txt", robotstxt);
-
-// 静态资源服务 - 只处理特定路径
+// 静态资源服务 - 必须在API路由之前
 app.use(
   "/_next/*",
   serveStatic({
-    root: "./public",
+    root: join(process.cwd(), "public"),
   }),
 );
+
+// 专门处理logo文件
+app.get("/sga-logo.png", serveStatic({
+  root: join(process.cwd(), "public"),
+}));
 
 app.use(
   "/favicon.ico",
   serveStatic({
-    root: "./public",
-    rewriteRequestPath: () => "/favicon.png",
+    root: join(process.cwd(), "public"),
+    rewriteRequestPath: () => "/favicon.ico",
   }),
 );
 
+// 静态文件服务 - 处理其他静态资源
 app.use(
-  "*.png",
+  "*",
   serveStatic({
-    root: "./public",
+    root: join(process.cwd(), "public"),
+    onNotFound: (path, c) => {
+      // 只有当请求的是静态文件时才返回404，否则继续处理
+      if (path.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot)$/)) {
+        return undefined; // 让Hono继续处理
+      }
+    },
   }),
 );
 
-app.use(
-  "*.svg",
-  serveStatic({
-    root: "./public",
-  }),
-);
+// API路由 - 在静态资源之后
+app.route("/", registry);
 
-app.use(
-  "*.jpg",
-  serveStatic({
-    root: "./public",
-  }),
-);
-// 读取前端应用的HTML文件
-let indexHtml: string;
-try {
-  // 尝试Docker容器路径
-  indexHtml = readFileSync(join("/app", "public", "index.html"), "utf-8");
-} catch (error) {
+// robots
+app.get("/robots.txt", robotstxt);
+// 读取前端应用的HTML文件：按请求读取，避免进程内缓存陈旧文件
+const readIndexHtml = (): string => {
   try {
-    // 尝试本地开发路径
-    indexHtml = readFileSync(join(process.cwd(), "public", "index.html"), "utf-8");
-  } catch (error2) {
-    // 如果都找不到，返回一个简单的HTML
-    indexHtml = `
+    // 优先容器路径
+    return readFileSync(join("/app", "public", "index.html"), "utf-8");
+  } catch (error) {
+    try {
+      // 回退到本地开发路径
+      return readFileSync(join(process.cwd(), "public", "index.html"), "utf-8");
+    } catch (error2) {
+      // 最终回退：极简静态页（不自动刷新）
+      return `
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>今日热榜 | DailyHot API</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            text-align: center;
-        }
-        .container { max-width: 600px; padding: 2rem; }
-        h1 { font-size: 3rem; margin-bottom: 1rem; }
-        p { font-size: 1.2rem; margin-bottom: 2rem; opacity: 0.9; }
-        .btn {
-            background: rgba(255,255,255,0.2);
-            border: 2px solid rgba(255,255,255,0.3);
-            color: white;
-            padding: 1rem 2rem;
-            border-radius: 50px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        .btn:hover {
-            background: rgba(255,255,255,0.3);
-            transform: translateY(-2px);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔥 今日热榜 | AI驱动的全网热点聚合平台</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1020; color: white; display: grid; place-items: center; height: 100vh; margin: 0; }
+    .container { max-width: 640px; padding: 2rem; text-align: center; }
+    a { color: #7dd3fc }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🔥 今日热榜</h1>
-        <p>AI驱动的全网热点聚合平台</p>
-        <p>前端资源加载中，请稍候...</p>
-        <a href="/aggregate" class="btn">查看API数据</a>
-    </div>
-    <script>
-        // 每3秒刷新一次页面，直到前端资源加载完成
-        setTimeout(() => {
-            window.location.reload();
-        }, 3000);
-    </script>
+  <div class="container">
+    <h1>🔥 今日热榜</h1>
+    <p>静态资源尚未就绪，请稍后刷新，或直接访问 <a href="/aggregate">/aggregate</a></p>
+  </div>
 </body>
 </html>`;
+    }
   }
-}
+};
 
 // 根路径直接返回前端应用
 app.get("/", (c) => {
-  return c.html(indexHtml);
+  return c.html(readIndexHtml());
 });
 
 // 404 - 返回前端的404页面
@@ -164,7 +130,7 @@ app.notFound((c) => {
     return c.text('Not Found', 404);
   }
   // 对于其他路由返回前端应用（SPA路由）
-  return c.html(indexHtml);
+  return c.html(readIndexHtml());
 });
 
 // error
@@ -179,7 +145,7 @@ app.onError((err, c) => {
     return c.text('Internal Server Error', 500);
   }
   // 对于其他路由返回前端应用
-  return c.html(indexHtml);
+  return c.html(readIndexHtml());
 });
 
 export default app;

@@ -29,8 +29,19 @@ const getNumbers = (text: string | undefined) => {
 };
 
 const getList = async (noCache: boolean) => {
-  const url = `https://www.douban.com/group/explore`;
-  const result = await get({ url, noCache });
+  try {
+    const url = `https://www.douban.com/group/explore`;
+    const result = await get({
+      url,
+      noCache,
+      ttl: 1800, // 30分钟缓存
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Cache-Control": "no-cache",
+      }
+    });
   const $ = load(result.data);
   const listDom = $(".article .channel-item");
   const listData = listDom.toArray().map((item) => {
@@ -47,8 +58,16 @@ const getList = async (noCache: boolean) => {
       mobileUrl: `https://m.douban.com/group/topic/${getNumbers(url)}/`,
     };
   });
-  return {
-    ...result,
-    data: listData,
-  };
+    return {
+      ...result,
+      data: listData,
+    };
+  } catch (error) {
+    // 如果请求失败，返回空数据
+    return {
+      fromCache: false,
+      updateTime: new Date().toISOString(),
+      data: [],
+    };
+  }
 };

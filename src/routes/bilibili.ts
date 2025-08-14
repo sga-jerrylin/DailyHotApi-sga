@@ -4,6 +4,7 @@ import { get } from "../utils/getData.js";
 import getBiliWbi from "../utils/getToken/bilibili.js";
 import { getTime } from "../utils/getTime.js";
 import logger from "../utils/logger.js";
+import { bilibiliFetch } from "../utils/myFetch.js";
 const typeMap: Record<string, string> = {
   "0": "全站",
   "1": "动画",
@@ -42,17 +43,44 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 
 const getList = async (options: Options, noCache: boolean): Promise<RouterResType> => {
   const { type } = options;
+
+  // 🚀 优化：如果是全站排行，尝试使用B站热搜API（更稳定）
+  if (type === "0") {
+    try {
+      const url = "https://s.search.bilibili.com/main/hotword?limit=30";
+      const res = await bilibiliFetch(url);
+
+      return {
+        fromCache: false,
+        updateTime: new Date().toISOString(),
+        data: res.list.map((k: any) => ({
+          id: k.keyword,
+          title: k.show_name,
+          desc: k.keyword,
+          url: `https://search.bilibili.com/all?keyword=${encodeURIComponent(k.keyword)}`,
+          mobileUrl: `https://search.bilibili.com/all?keyword=${encodeURIComponent(k.keyword)}`,
+          timestamp: getTime(Date.now()),
+          hot: k.heat_score || 0,
+        })),
+      };
+    } catch (error) {
+      logger.warn("B站热搜API失败，降级到排行榜API");
+    }
+  }
+
+  // 原有的排行榜实现
   const wbiData = await getBiliWbi();
   const url = `https://api.bilibili.com/x/web-interface/ranking/v2?rid=${type}&type=all&${wbiData}`;
   const result = await get({
     url,
+    ttl: 600, // 🚀 优化：B站热榜缓存10分钟
     headers: {
       'Referer': 'https://www.bilibili.com/ranking/all',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
       'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
       'Accept-Encoding': 'gzip, deflate, br',
-      'Sec-Ch-Ua': '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+      'Sec-Ch-Ua': '"Google Chrome";v="120", "Not:A-Brand";v="8", "Chromium";v="120"',
       'Sec-Ch-Ua-Mobile': '?0',
       'Sec-Ch-Ua-Platform': '"Windows"',
       'Sec-Fetch-Dest': 'document',

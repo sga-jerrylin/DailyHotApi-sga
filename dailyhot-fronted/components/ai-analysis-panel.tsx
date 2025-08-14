@@ -16,15 +16,26 @@ export function AIAnalysisPanel() {
   const DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
   // 获取热点数据并调用DeepSeek分析
-  const startAnalysis = async () => {
+  const startAnalysis = async (analysisType: string = 'all') => {
     setIsAnalyzing(true)
     setAnalysisText("")
     setError("")
 
     try {
-      // 1. 获取热点数据 - 使用现有的aggregate API
+      // 1. 获取热点数据 - 根据分析类型选择不同的API
       const apiBase = process.env.NODE_ENV === 'development' ? 'http://localhost:6688' : window.location.origin
-      const response = await fetch(`${apiBase}/aggregate?group=source&per=5`)
+      let apiUrl = `${apiBase}/aggregate?group=source&per=5`
+
+      // 根据分析类型调整API参数
+      if (analysisType === 'tech') {
+        apiUrl = `${apiBase}/aggregate?group=category&category=tech&per=10`
+      } else if (analysisType === 'finance') {
+        apiUrl = `${apiBase}/aggregate?group=category&category=finance&per=10`
+      } else if (analysisType === 'news') {
+        apiUrl = `${apiBase}/aggregate?group=category&category=news&per=10`
+      }
+
+      const response = await fetch(apiUrl)
       const hotData = await response.json()
 
       if (!hotData.categories || hotData.categories.length === 0) {
@@ -32,7 +43,7 @@ export function AIAnalysisPanel() {
       }
 
       // 2. 构建分析提示词
-      const prompt = buildAnalysisPromptFromAggregate(hotData.categories)
+      const prompt = buildAnalysisPromptFromAggregate(hotData.categories, analysisType)
 
       // 3. 调用DeepSeek API进行流式分析
       await callDeepSeekAPI(prompt)
@@ -44,8 +55,17 @@ export function AIAnalysisPanel() {
   }
 
   // 构建分析提示词 - 基于aggregate API数据
-  const buildAnalysisPromptFromAggregate = (categories: any[]) => {
-    let prompt = `你是SGA AI热点分析专家。请基于以下中国互联网热点数据进行深度分析：
+  const buildAnalysisPromptFromAggregate = (categories: any[], analysisType: string = 'all') => {
+    const analysisTypeMap = {
+      'all': '全网热点',
+      'tech': '科技新闻',
+      'finance': '财经',
+      'news': '实时新闻'
+    }
+
+    const analysisTypeName = analysisTypeMap[analysisType as keyof typeof analysisTypeMap] || '全网热点'
+
+    let prompt = `你是SGA AI热点分析专家。请基于以下中国互联网${analysisTypeName}数据进行深度分析：
 
 ## 数据源概览
 `
@@ -69,23 +89,52 @@ export function AIAnalysisPanel() {
       })
     })
 
+    // 根据分析类型调整分析要求
+    let analysisRequirements = ''
+    if (analysisType === 'tech') {
+      analysisRequirements = `
+🔥 科技热点分析 - 识别当前最热门的科技话题和技术趋势
+🚀 技术创新识别 - 发现新兴技术、产品发布、行业变革
+📱 产品动态分析 - 分析科技公司产品更新、市场策略
+🔬 行业趋势预测 - 基于数据预测科技行业发展方向
+💡 投资机会洞察 - 识别科技领域的投资热点和商业机会`
+    } else if (analysisType === 'finance') {
+      analysisRequirements = `
+💰 财经热点分析 - 识别当前最受关注的财经话题
+📈 市场趋势分析 - 分析股市、汇市、商品市场动向
+🏦 政策影响评估 - 分析财经政策对市场的影响
+💼 企业动态追踪 - 关注重要企业的财务表现和战略调整
+🔮 经济走势预测 - 基于数据预测经济发展趋势`
+    } else if (analysisType === 'news') {
+      analysisRequirements = `
+📰 实时新闻分析 - 识别当前最重要的新闻事件
+🌍 社会热点追踪 - 分析社会关注度高的事件和话题
+🔥 舆情趋势分析 - 评估公众对重要事件的反应和情绪
+⚡ 突发事件监控 - 识别可能产生重大影响的突发新闻
+📊 传播影响评估 - 分析新闻事件的传播范围和社会影响`
+    } else {
+      analysisRequirements = `
+🔥 热点共性分析 - 找出跨平台、跨领域的共同话题和趋势
+🌱 苗头趋势识别 - 识别正在兴起但还未完全爆发的话题
+📊 分类特征分析 - 各分类(科技、新媒体、实时新闻、财经)的独特特征
+🔄 传播规律分析 - 不同平台间的话题传播时差和特点
+🔮 未来趋势预测 - 基于当前数据预测未来1-3天的热点走向`
+    }
+
     prompt += `## 分析要求
-基于以上 ${totalSources} 个数据源的热点数据，请从以下维度进行深度分析：
+基于以上 ${totalSources} 个数据源的${analysisTypeName}数据，请从以下维度进行深度分析：
+${analysisRequirements}
 
-1. **🔥 热点共性分析** - 找出跨平台、跨领域的共同话题和趋势
-2. **🌱 苗头趋势识别** - 识别正在兴起但还未完全爆发的话题
-3. **📊 分类特征分析** - 各分类(科技、新媒体、实时新闻、财经)的独特特征
-4. **🔄 传播规律分析** - 不同平台间的话题传播时差和特点
-5. **🔮 未来趋势预测** - 基于当前数据预测未来1-3天的热点走向
+## 输出要求
+⚠️ 重要：请严格按照以下格式输出，不要使用markdown语法（如**、##、-等）：
 
-## 输出格式
-请用中文输出，使用emoji和结构化格式，让分析结果易读且有洞察力。重点关注：
-- 数据背后的深层含义
-- 社会文化趋势
-- 商业机会和风险
-- 公众情绪和关注点变化
+1. 使用丰富的emoji表情符号增强可读性
+2. 用简洁的段落和换行组织内容
+3. 避免使用任何markdown格式标记
+4. 重点关注数据背后的深层含义、社会文化趋势、商业机会和风险、公众情绪变化
+5. 语言要生动有趣，适合在聊天界面显示
 
-开始你的专业分析：`
+现在开始你的${analysisTypeName}专业分析：`
 
     return prompt
   }
@@ -173,7 +222,7 @@ export function AIAnalysisPanel() {
                 </div>
                 <div>
                   <CardTitle className="text-white text-xl">SGA AI 热点趋势分析</CardTitle>
-                  <p className="text-gray-400 text-sm mt-1">实时智能分析35个数据源热点趋势</p>
+                  <p className="text-gray-400 text-sm mt-1">实时智能分析78个数据源热点趋势</p>
                 </div>
               </div>
               <Badge variant="outline" className="border-cyan-500/50 bg-cyan-500/10 text-cyan-300">
@@ -183,21 +232,75 @@ export function AIAnalysisPanel() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Button
-                onClick={startAnalysis}
+                onClick={() => startAnalysis('all')}
                 disabled={isAnalyzing}
-                className="bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all duration-300"
+                className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300 h-12"
               >
                 {isAnalyzing ? (
                   <>
                     <Zap className="h-4 w-4 mr-2 animate-spin" />
-                    DeepSeek AI 分析中...
+                    分析中...
                   </>
                 ) : (
                   <>
                     <TrendingUp className="h-4 w-4 mr-2" />
-                    开始 DeepSeek AI 分析
+                    全网分析
+                  </>
+                )}
+              </Button>
+
+              <Button
+                onClick={() => startAnalysis('tech')}
+                disabled={isAnalyzing}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-300 h-12"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Zap className="h-4 w-4 mr-2 animate-spin" />
+                    分析中...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    科技新闻分析
+                  </>
+                )}
+              </Button>
+
+              <Button
+                onClick={() => startAnalysis('finance')}
+                disabled={isAnalyzing}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all duration-300 h-12"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Zap className="h-4 w-4 mr-2 animate-spin" />
+                    分析中...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    财经分析
+                  </>
+                )}
+              </Button>
+
+              <Button
+                onClick={() => startAnalysis('news')}
+                disabled={isAnalyzing}
+                className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all duration-300 h-12"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Zap className="h-4 w-4 mr-2 animate-spin" />
+                    分析中...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    实时新闻分析
                   </>
                 )}
               </Button>
@@ -228,20 +331,7 @@ export function AIAnalysisPanel() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-              <div className="bg-slate-800/30 rounded-lg p-4 border border-cyan-500/20 backdrop-blur-sm">
-                <div className="text-cyan-400 text-sm font-semibold mb-1">DeepSeek 模型</div>
-                <div className="text-white text-lg font-bold">deepseek-chat</div>
-              </div>
-              <div className="bg-slate-800/30 rounded-lg p-4 border border-purple-500/20 backdrop-blur-sm">
-                <div className="text-purple-400 text-sm font-semibold mb-1">分析维度</div>
-                <div className="text-white text-lg font-bold">5大维度</div>
-              </div>
-              <div className="bg-slate-800/30 rounded-lg p-4 border border-green-500/20 backdrop-blur-sm">
-                <div className="text-green-400 text-sm font-semibold mb-1">数据源</div>
-                <div className="text-white text-lg font-bold">35+ 平台</div>
-              </div>
-            </div>
+
           </CardContent>
         </Card>
       </div>

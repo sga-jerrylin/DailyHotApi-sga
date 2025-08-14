@@ -11,5 +11,5 @@
     "jsxImportSource": "hono/jsx",
     "outDir": "./dist"
   },
-  "exclude": ["node_modules", "*.test.*", "./dist/**/*", "dailyhot-fronted/**/*"]
+  "exclude": ["node_modules", "*.test.*", "./dist/**/*", "dailyhot-fronted/**/*", "newsnow-reference/**/*"]
 }

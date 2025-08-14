@@ -2,6 +2,7 @@ import type { RouterData } from "../types.js";
 import type { RouterType } from "../router.types.js";
 import { get } from "../utils/getData.js";
 import { getTime } from "../utils/getTime.js";
+import { simpleFetch } from "../utils/simpleFetch.js";
 
 export const handleRoute = async (_: undefined, noCache: boolean) => {
   const listData = await getList(noCache);
@@ -18,36 +19,32 @@ export const handleRoute = async (_: undefined, noCache: boolean) => {
 };
 
 const getList = async (noCache: boolean) => {
-  const url =
-    "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot&title=%E5%BE%AE%E5%8D%9A%E7%83%AD%E6%90%9C&extparam=filter_type%3Drealtimehot%26mi_cid%3D100103%26pos%3D0_0%26c_type%3D30%26display_time%3D1540538388&luicode=10000011&lfid=231583";
+  // 🚀 使用简化的fetch，完全模仿newsnow的实现
+  const url = "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot";
 
-  const result = await get({
-    url,
+  const result = await simpleFetch(url, {
     noCache,
-    ttl: 60,
+    ttl: 120,
     headers: {
-      Referer: "https://s.weibo.com/top/summary?cate=realtimehot",
-      "MWeibo-Pwa": "1",
-      "X-Requested-With": "XMLHttpRequest",
-      "User-Agent":
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1",
-    },
+      "Referer": "https://m.weibo.cn/",
+      "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+      "Accept": "application/json, text/plain, */*",
+      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    }
   });
-  const list = result.data.data.cards?.[0]?.card_group;
+
+  const list = result.data.cards[0].card_group
+    .filter((k: any, i: number) => i !== 0 && k.desc && !k.actionlog?.ext.includes("ads_word"));
+
   return {
     ...result,
-    data: list.map((v: RouterType["weibo"]) => {
-      const key = v.word_scheme ? v.word_scheme : `#${v.desc}`;
-      return {
-        id: v.itemid,
-        title: v.desc,
-        desc: key,
-        // author: v.flag_desc,
-        timestamp: getTime(v.onboard_time),
-        // hot: v.num,
-        url: `https://s.weibo.com/weibo?q=${encodeURIComponent(key)}&t=31&band_rank=1&Refer=top`,
-        mobileUrl: v?.scheme,
-      };
-    }),
+    data: list.map((k: any) => ({
+      id: k.desc,
+      title: k.desc,
+      desc: `#${k.desc}#`,
+      timestamp: getTime(Date.now()),
+      url: `https://s.weibo.com/weibo?q=${encodeURIComponent(`#${k.desc}#`)}`,
+      mobileUrl: k.scheme,
+    })),
   };
 };

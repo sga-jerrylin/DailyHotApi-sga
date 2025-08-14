@@ -61,8 +61,31 @@ export const get = async (options: Get) => {
         };
       }
     }
+
+    // 🚀 性能优化：为不同类型的请求设置不同的超时时间
+    const isAggregateRequest = url.includes('/aggregate') || url.includes('localhost:');
+    const isGitHubRequest = url.includes('github.com');
+    const isBilibiliRequest = url.includes('bilibili.com');
+    const isWeiboRequest = url.includes('weibo.cn');
+
+    let requestTimeout = config.REQUEST_TIMEOUT;
+    if (isAggregateRequest) {
+      requestTimeout = Math.min(config.REQUEST_TIMEOUT, 8000); // 聚合请求8秒超时
+    } else if (isGitHubRequest) {
+      requestTimeout = 15000; // GitHub 15秒超时
+    } else if (isBilibiliRequest) {
+      requestTimeout = 10000; // B站 10秒超时
+    } else if (isWeiboRequest) {
+      requestTimeout = 8000; // 微博 8秒超时
+    }
+
     // 缓存不存在时请求接口
-    const response = await request.get(url, { headers, params, responseType });
+    const response = await request.get(url, {
+      headers,
+      params,
+      responseType,
+      timeout: requestTimeout
+    });
     const responseData = response?.data || response;
     // 存储新获取的数据到缓存
     const updateTime = new Date().toISOString();
@@ -72,7 +95,7 @@ export const get = async (options: Get) => {
     logger.info(`✅ [${response?.status}] request was successful`);
     return { fromCache: false, updateTime, data };
   } catch (error) {
-    logger.error("❌ [ERROR] request failed");
+    logger.error(`❌ [ERROR] request failed for ${url}:`, error instanceof Error ? error.message : 'Unknown error');
     throw error;
   }
 };

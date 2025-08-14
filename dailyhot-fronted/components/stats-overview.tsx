@@ -9,6 +9,8 @@ export function StatsOverview() {
     { label: "新媒体", value: 0, target: 100, color: "from-pink-500 to-purple-500", key: "media" },
     { label: "实时新闻", value: 0, target: 100, color: "from-red-500 to-orange-500", key: "news" },
     { label: "财经", value: 0, target: 100, color: "from-green-500 to-teal-500", key: "finance" },
+    { label: "社区论坛", value: 0, target: 100, color: "from-yellow-500 to-amber-500", key: "community" },
+    { label: "娱乐游戏", value: 0, target: 100, color: "from-indigo-500 to-violet-500", key: "entertainment" },
   ])
 
   useEffect(() => {
@@ -17,16 +19,18 @@ export function StatsOverview() {
       try {
         // 在开发模式下使用后端服务器地址，生产模式下使用相对路径
         const apiBase = process.env.NODE_ENV === 'development' ? 'http://localhost:6688' : window.location.origin
-        const response = await fetch(`${apiBase}/aggregate?group=source&per=8`)
+        const response = await fetch(`${apiBase}/aggregate?group=source&per=10`)
         const data = await response.json()
 
-        if (data.categories) {
+        if (data.groups) {
           setStats(prev => prev.map(stat => {
-            const categoryData = data.categories.find((cat: any) => cat.key === stat.key)
+            // 统计每个分类的数据源数量
+            const categoryGroups = data.groups.filter((group: any) => group.category === stat.key)
+            const totalItems = categoryGroups.reduce((sum: number, group: any) => sum + (group.data?.length || 0), 0)
             return {
               ...stat,
-              value: categoryData ? categoryData.data.length : 0,
-              target: categoryData ? Math.max(categoryData.data.length, 100) : 100
+              value: categoryGroups.length, // 数据源数量
+              target: Math.max(categoryGroups.length, 10) // 目标值
             }
           }))
         }
@@ -51,7 +55,7 @@ export function StatsOverview() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 lg:px-8 pb-16">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((stat, index) => (
           <Card key={index} className="bg-black/20 border-gray-800 backdrop-blur-sm p-6 text-center">
             <div className={`text-3xl font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>

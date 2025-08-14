@@ -4,9 +4,9 @@ import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.dev',
+  title: '🔥 今日热榜 | AI驱动的全网热点聚合平台',
+  description: '基于SGA AI技术，聚合78+数据源，智能分析科技、新媒体、实时新闻、财经、社区论坛、娱乐游戏等热点趋势',
+  generator: 'SGA AI',
 }
 
 export default function RootLayout({

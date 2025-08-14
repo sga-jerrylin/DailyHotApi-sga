@@ -25,27 +25,44 @@ const titleProcessing = (text: string) => {
 };
 
 const getList = async (noCache: boolean) => {
-  const url = `https://www.huxiu.com/moment/`;
-  const result = await get({
-    url,
-    noCache,
-  });
-  // 正则查找
-  const pattern =
-    /<script>[\s\S]*?window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});[\s\S]*?<\/script>/;
-  const matchResult = result.data.match(pattern);
-  const jsonObject = JSON.parse(matchResult[1]).moment.momentList.moment_list.datalist;
-  return {
-    ...result,
-    data: jsonObject.map((v: RouterType["huxiu"]) => ({
-      id: v.object_id,
-      title: titleProcessing(v.content).title,
-      desc: titleProcessing(v.content).intro,
-      author: v.user_info.username,
-      timestamp: getTime(v.publish_time),
-      hot: undefined,
-      url: v.url || `https://www.huxiu.com/moment/${v.object_id}.html`,
-      mobileUrl: v.url || `https://m.huxiu.com/moment/${v.object_id}.html`,
-    })),
-  };
+  try {
+    const url = `https://www.huxiu.com/moment/`;
+    const result = await get({
+      url,
+      noCache,
+      ttl: 600,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://www.huxiu.com/",
+      }
+    });
+    // 正则查找
+    const pattern =
+      /<script>[\s\S]*?window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});[\s\S]*?<\/script>/;
+    const matchResult = result.data.match(pattern);
+    if (!matchResult) {
+      throw new Error("Failed to parse huxiu data");
+    }
+    const jsonObject = JSON.parse(matchResult[1]).moment.momentList.moment_list.datalist;
+    return {
+      ...result,
+      data: jsonObject.map((v: any) => ({
+        id: v.object_id,
+        title: titleProcessing(v.content).title,
+        desc: titleProcessing(v.content).intro,
+        author: v.user_info.username,
+        timestamp: getTime(v.publish_time),
+        hot: 0,
+        url: v.url || `https://www.huxiu.com/moment/${v.object_id}.html`,
+        mobileUrl: v.url || `https://m.huxiu.com/moment/${v.object_id}.html`,
+      })),
+    };
+  } catch (error) {
+    // 如果请求失败，返回空数据
+    return {
+      fromCache: false,
+      updateTime: new Date().toISOString(),
+      data: [],
+    };
+  }
 };
