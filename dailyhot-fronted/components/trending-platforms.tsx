@@ -15,11 +15,11 @@ const categoryMap = {
     color: "from-blue-500 to-cyan-500",
     key: "tech"
   },
-  newmedia: {
+  media: {
     name: "新媒体",
     icon: "📱",
     color: "from-pink-500 to-purple-500",
-    key: "media"  // API返回的是 "media"
+    key: "media"
   },
   news: {
     name: "实时新闻",
@@ -32,6 +32,18 @@ const categoryMap = {
     icon: "💰",
     color: "from-green-500 to-teal-500",
     key: "finance"
+  },
+  community: {
+    name: "社区论坛",
+    icon: "💬",
+    color: "from-yellow-500 to-amber-500",
+    key: "community"
+  },
+  entertainment: {
+    name: "娱乐游戏",
+    icon: "🎮",
+    color: "from-indigo-500 to-violet-500",
+    key: "entertainment"
   }
 }
 
@@ -52,52 +64,44 @@ export function TrendingPlatforms() {
   const [loading, setLoading] = useState(true)
 
   // 获取数据 - 使用group=source模式获取按数据源分组的数据
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true)
-        // 在开发模式下使用后端服务器地址，生产模式下使用相对路径
-        const apiBase = process.env.NODE_ENV === 'development' ? 'http://localhost:6688' : window.location.origin
-        const response = await fetch(`${apiBase}/aggregate?group=source&per=8`)
-        const result = await response.json()
-        setData(result)
-      } catch (error) {
-        console.error('Failed to fetch data:', error)
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      // 在开发模式下使用后端服务器地址，生产模式下使用相对路径
+      const apiBase = process.env.NODE_ENV === 'development' ? 'http://localhost:6688' : window.location.origin
+      const response = await fetch(`${apiBase}/aggregate?group=source&per=10`)
+      const result = await response.json()
+      setData(result)
+    } catch (error) {
+      console.error('Failed to fetch data:', error)
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     fetchData()
-    // 每30秒刷新一次数据
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
+    // 移除自动刷新，改为手动刷新
+    // const interval = setInterval(fetchData, 30000)
+    // return () => clearInterval(interval)
   }, [])
 
-  // 根据分类过滤数据源 - 使用后端提供的按数据源分组的数据
+  // 根据分类过滤数据源 - 直接使用后端返回的分类数据
   const getFilteredSources = (category: string) => {
     if (!data?.groups || !Array.isArray(data.groups)) return []
 
     const categoryInfo = categoryMap[category as keyof typeof categoryMap]
     if (!categoryInfo) return []
 
-    // 从CATEGORY_ROUTES配置中获取该分类的数据源列表
-    const categoryRoutes = {
-      tech: ["36kr", "ithome", "ithome-xijiayi", "csdn", "juejin", "geekpark", "ifanr", "hellogithub", "nodeseek", "linuxdo", "github", "producthunt"],
-      media: ["weibo", "zhihu", "zhihu-daily", "douyin", "kuaishou", "bilibili", "acfun", "tieba", "v2ex", "smzdm", "coolapk", "douban-group", "douban-movie", "weread", "yystv", "hupu"],
-      news: ["qq-news", "sina-news", "sina", "netease-news", "thepaper", "nytimes", "baidu", "weatheralarm", "earthquake"],
-      finance: ["36kr", "thepaper", "huxiu"]
-    }
-
-    const routes = categoryRoutes[categoryInfo.key as keyof typeof categoryRoutes] || []
-
-    // 过滤出属于当前分类的数据源
-    return data.groups.filter((group: any) => routes.includes(group.route)).map((group: any) => ({
-      route: group.route,
-      name: group.title,
-      title: group.title,
-      items: group.data || [],
-      total: group.total || 0
+    // 直接使用后端返回的category字段进行过滤，避免前端硬编码
+    return data.groups
+      .filter((group: any) => group.category === categoryInfo.key)
+      .map((group: any) => ({
+        route: group.route,
+        name: group.title,
+        title: group.title,
+        items: group.data || [],
+        total: group.total || 0
     }))
   }
 
@@ -107,8 +111,8 @@ export function TrendingPlatforms() {
     return (
       <div className="mx-auto max-w-7xl px-6 lg:px-8 pb-24">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-white mb-4">35个数据源 · 四大分类聚合</h2>
-          <p className="text-gray-400">科技、新媒体、实时新闻、财经 - 全方位热点追踪</p>
+          <h2 className="text-3xl font-bold text-white mb-4">78个数据源 · 六大分类聚合</h2>
+          <p className="text-gray-400">科技、新媒体、实时新闻、财经、社区论坛、娱乐游戏 - 全方位热点追踪</p>
         </div>
         <div className="text-center text-gray-400 py-12">
           <div className="animate-pulse">正在加载热点数据...</div>
@@ -120,12 +124,21 @@ export function TrendingPlatforms() {
   return (
     <div className="mx-auto max-w-7xl px-6 lg:px-8 pb-24">
       <div className="text-center mb-12">
-        <h2 className="text-3xl font-bold text-white mb-4">35个数据源 · 四大分类聚合</h2>
-        <p className="text-gray-400">科技、新媒体、实时新闻、财经 - 全方位热点追踪</p>
+        <div className="flex items-center justify-center gap-4 mb-4">
+          <h2 className="text-3xl font-bold text-white">78个数据源 · 六大分类聚合</h2>
+          <Button
+            onClick={fetchData}
+            disabled={loading}
+            className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 text-white"
+          >
+            {loading ? "🔄 刷新中..." : "🔄 手动刷新"}
+          </Button>
+        </div>
+        <p className="text-gray-400">科技、新媒体、实时新闻、财经、社区论坛、娱乐游戏 - 全方位热点追踪</p>
       </div>
 
       <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
-        <TabsList className="grid w-full grid-cols-4 bg-black/20 border border-gray-800">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 bg-black/20 border border-gray-800">
           {Object.entries(categoryMap).map(([key, category]) => (
             <TabsTrigger
               key={key}

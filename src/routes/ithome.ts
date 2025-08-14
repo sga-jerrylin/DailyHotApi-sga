@@ -31,25 +31,52 @@ const replaceLink = (url: string, getId: boolean = false) => {
 };
 
 const getList = async (noCache: boolean) => {
-  const url = `https://m.ithome.com/rankm/`;
-  const result = await get({ url, noCache });
-  const $ = load(result.data);
-  const listDom = $(".rank-box .placeholder");
-  const listData = listDom.toArray().map((item) => {
-    const dom = $(item);
-    const href = dom.find("a").attr("href");
+  try {
+    // 🚀 完全对齐newsnow：使用桌面版URL和选择器
+    const url = `https://www.ithome.com/list/`;
+    const result = await get({
+      url,
+      noCache,
+      ttl: 600,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+      }
+    });
+
+    const $ = load(result.data);
+    const listDom = $("#list > div.fl > ul > li");
+    const listData = listDom.toArray().map((item) => {
+      const dom = $(item);
+      const $a = dom.find("a.t");
+      const href = $a.attr("href");
+      const title = $a.text();
+      const date = dom.find("i").text();
+
+      // 完全对齐newsnow的过滤逻辑
+      const isAd = href?.includes("lapin") || ["神券", "优惠", "补贴", "京东"].find(k => title.includes(k));
+      if (isAd || !href || !title || !date) return null;
+
+      return {
+        id: href,
+        title: title,
+        timestamp: getTime(date),
+        hot: 0,
+        url: href,
+        mobileUrl: href,
+      };
+    }).filter((item): item is NonNullable<typeof item> => item !== null);
+
     return {
-      id: href ? Number(replaceLink(href, true)) : 100000,
-      title: dom.find(".plc-title").text().trim(),
-      cover: dom.find("img").attr("data-original"),
-      timestamp: getTime(dom.find("span.post-time").text().trim()),
-      hot: Number(dom.find(".review-num").text().replace(/\D/g, "")),
-      url: href ? replaceLink(href) : "",
-      mobileUrl: href ? replaceLink(href) : "",
+      ...result,
+      data: listData,
     };
-  });
-  return {
-    ...result,
-    data: listData,
-  };
+  } catch (error) {
+    return {
+      fromCache: false,
+      updateTime: new Date().toISOString(),
+      data: [],
+    };
+  }
 };

@@ -130,9 +130,9 @@ export function HeroSection() {
             </h1>
 
             <p className="text-xl leading-10 text-gray-300 max-w-3xl mx-auto backdrop-blur-sm">
-              基于SGA AI技术，聚合微博、抖音、知乎等主流平台热点内容，
+              基于SGA AI技术，聚合78个数据源，
               <br className="hidden sm:block" />
-              智能分析热点趋势，为您提供最具洞察力的中文互联网热点资讯。
+              覆盖科技、新媒体、新闻、财经、社区、娱乐等六大分类，智能分析热点趋势，为您提供最具洞察力的中文互联网热点资讯。
             </p>
           </div>
 

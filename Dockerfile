@@ -41,6 +41,9 @@ COPY --from=builder /app/public /app/public
 COPY --from=builder /app/.env /app/.env
 COPY --from=builder /app/package.json /app/package.json
 
+# 设置工作目录
+WORKDIR /app
+
 # 切换用户
 USER hono
 
@@ -48,4 +51,4 @@ USER hono
 EXPOSE 6688
 
 # 运行
-CMD ["node", "/app/dist/index.js"]
+CMD ["node", "dist/index.js"]

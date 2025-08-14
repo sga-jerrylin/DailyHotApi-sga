@@ -1,6 +1,7 @@
 import type { RouterData, ListContext, Options, RouterResType } from "../types.js";
 import type { RouterType } from "../router.types.js";
 import { get } from "../utils/getData.js";
+import { simpleFetch } from "../utils/simpleFetch.js";
 
 const typeMap: Record<string, string> = {
   realtime: "热搜",
@@ -32,32 +33,37 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 };
 
 const getList = async (options: Options, noCache: boolean): Promise<RouterResType> => {
-  const { type } = options;
-  const url = `https://top.baidu.com/board?tab=${type}`;
-  const result = await get({
-    url,
+  // 🚀 修复：使用newsnow的固定参数
+  const url = `https://top.baidu.com/board?tab=realtime`;
+
+  const result = await simpleFetch(url, {
     noCache,
+    ttl: 600,
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/1.0 Mobile/12F69 Safari/605.1.15",
-    },
+      "Referer": "https://www.baidu.com/",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "Cache-Control": "no-cache",
+    }
   });
-  // 正则查找
-  const pattern = /<!--s-data:(.*?)-->/s;
-  const matchResult = result.data.match(pattern);
-  const jsonObject = JSON.parse(matchResult[1]).cards[0].content;
+
+  // 解析百度热搜数据
+  const jsonStr = (result.data as string).match(/<!--s-data:(.*?)-->/s);
+  const data = JSON.parse(jsonStr![1]);
+
   return {
     ...result,
-    data: jsonObject.map((v: RouterType["baidu"]) => ({
-      id: v.index,
-      title: v.word,
-      desc: v.desc,
-      cover: v.img,
-      author: v.show?.length ? v.show : "",
-      timestamp: 0,
-      hot: Number(v.hotScore || 0),
-      url: `https://www.baidu.com/s?wd=${encodeURIComponent(v.query)}`,
-      mobileUrl: v.rawUrl,
-    })),
+    data: data.data.cards[0].content
+      .filter((k: any) => !k.isTop)
+      .map((k: any) => ({
+        id: k.rawUrl,
+        title: k.word,
+        desc: k.desc || "",
+        url: k.rawUrl,
+        mobileUrl: k.rawUrl,
+        hot: Number(k.hotScore || 0),
+        timestamp: 0,
+      })),
   };
 };
