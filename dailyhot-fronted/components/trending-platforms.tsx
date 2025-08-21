@@ -60,107 +60,174 @@ function formatHeat(heat: any) {
 
 export function TrendingPlatforms() {
   const [selectedCategory, setSelectedCategory] = useState("tech")
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [categoryData, setCategoryData] = useState<{[key: string]: any}>({})
+  const [loadingCategories, setLoadingCategories] = useState<Set<string>>(new Set())
+  const [loadedSources, setLoadedSources] = useState<{[key: string]: Set<string>}>({})
 
-  // 获取数据 - 使用group=source模式获取按数据源分组的数据
-  const fetchData = async () => {
+  // 流式加载所有数据 - 加载一个显示一个
+  const fetchAllDataStreaming = async () => {
+    const apiBase = process.env.NODE_ENV === 'development' ? 'http://localhost:6688' : window.location.origin
+
     try {
-      setLoading(true)
-      // 在开发模式下使用后端服务器地址，生产模式下使用相对路径
-      const apiBase = process.env.NODE_ENV === 'development' ? 'http://localhost:6688' : window.location.origin
-      const response = await fetch(`${apiBase}/aggregate?group=source&per=10`)
-      const result = await response.json()
-      setData(result)
+      // 标记所有分类为加载中
+      setLoadingCategories(new Set(Object.keys(categoryMap)))
+
+      // 并发获取所有分类的数据
+      const categoryPromises = Object.keys(categoryMap).map(async (category) => {
+        try {
+          const response = await fetch(`${apiBase}/aggregate?group=source&category=${category}&per=10`)
+          const result = await response.json()
+
+          // 立即更新这个分类的数据（流式显示）
+          setCategoryData(prev => ({
+            ...prev,
+            [category]: result
+          }))
+
+          // 标记这个分类加载完成
+          setLoadingCategories(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(category)
+            return newSet
+          })
+
+          // 记录已加载的数据源
+          if (result.groups) {
+            setLoadedSources(prev => ({
+              ...prev,
+              [category]: new Set(result.groups.map((g: any) => g.route))
+            }))
+          }
+
+          console.log(`✅ [${category}] 分类数据加载完成`)
+
+        } catch (error) {
+          console.error(`❌ [${category}] 分类数据加载失败:`, error)
+          // 即使失败也要移除加载状态
+          setLoadingCategories(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(category)
+            return newSet
+          })
+        }
+      })
+
+      // 等待所有分类加载完成（但不阻塞显示）
+      await Promise.allSettled(categoryPromises)
+      console.log('🎉 所有分类数据加载完成')
+
     } catch (error) {
-      console.error('Failed to fetch data:', error)
-    } finally {
-      setLoading(false)
+      console.error('❌ 数据加载失败:', error)
+      setLoadingCategories(new Set())
     }
   }
 
+  // 初始化时开始流式加载
   useEffect(() => {
-    fetchData()
-    // 移除自动刷新，改为手动刷新
-    // const interval = setInterval(fetchData, 30000)
-    // return () => clearInterval(interval)
+    fetchAllDataStreaming()
   }, [])
 
-  // 根据分类过滤数据源 - 直接使用后端返回的分类数据
+  // 根据分类获取数据源
   const getFilteredSources = (category: string) => {
-    if (!data?.groups || !Array.isArray(data.groups)) return []
+    const currentData = categoryData[category]
+    if (!currentData?.groups || !Array.isArray(currentData.groups)) return []
 
-    const categoryInfo = categoryMap[category as keyof typeof categoryMap]
-    if (!categoryInfo) return []
-
-    // 直接使用后端返回的category字段进行过滤，避免前端硬编码
-    return data.groups
-      .filter((group: any) => group.category === categoryInfo.key)
-      .map((group: any) => ({
-        route: group.route,
-        name: group.title,
-        title: group.title,
-        items: group.data || [],
-        total: group.total || 0
+    return currentData.groups.map((group: any) => ({
+      route: group.route,
+      name: group.title,
+      title: group.title,
+      items: group.data || [],
+      total: group.total || 0
     }))
   }
 
-
-
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-7xl px-6 lg:px-8 pb-24">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-white mb-4">78个数据源 · 六大分类聚合</h2>
-          <p className="text-gray-400">科技、新媒体、实时新闻、财经、社区论坛、娱乐游戏 - 全方位热点追踪</p>
-        </div>
-        <div className="text-center text-gray-400 py-12">
-          <div className="animate-pulse">正在加载热点数据...</div>
-        </div>
-      </div>
-    )
+  // 手动刷新所有数据
+  const refreshAllData = async () => {
+    // 清空现有数据
+    setCategoryData({})
+    setLoadedSources({})
+    // 重新开始流式加载
+    await fetchAllDataStreaming()
   }
+
+  // 检查分类是否正在加载
+  const isCategoryLoading = (category: string) => {
+    return loadingCategories.has(category)
+  }
+
+  // 检查分类是否有数据
+  const hasCategoryData = (category: string) => {
+    return categoryData[category] && getFilteredSources(category).length > 0
+  }
+
+
+
+  // 获取加载统计信息
+  const totalCategories = Object.keys(categoryMap).length
+  const loadedCategoriesCount = totalCategories - loadingCategories.size
+  const loadingProgress = Math.round((loadedCategoriesCount / totalCategories) * 100)
 
   return (
     <div className="mx-auto max-w-7xl px-6 lg:px-8 pb-24">
       <div className="text-center mb-12">
         <div className="flex items-center justify-center gap-4 mb-4">
           <h2 className="text-3xl font-bold text-white">78个数据源 · 六大分类聚合</h2>
-          <Button
-            onClick={fetchData}
-            disabled={loading}
-            className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 text-white"
-          >
-            {loading ? "🔄 刷新中..." : "🔄 手动刷新"}
-          </Button>
+          <div className="flex items-center gap-3">
+            {loadingCategories.size > 0 && (
+              <div className="flex items-center gap-2 text-sm text-cyan-400">
+                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
+                <span>加载中 {loadingProgress}%</span>
+              </div>
+            )}
+            <Button
+              onClick={refreshAllData}
+              disabled={loadingCategories.size > 0}
+              className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 text-white"
+            >
+              {loadingCategories.size > 0 ? "🔄 加载中..." : "🔄 刷新全部"}
+            </Button>
+          </div>
         </div>
         <p className="text-gray-400">科技、新媒体、实时新闻、财经、社区论坛、娱乐游戏 - 全方位热点追踪</p>
       </div>
 
       <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 bg-black/20 border border-gray-800">
-          {Object.entries(categoryMap).map(([key, category]) => (
-            <TabsTrigger
-              key={key}
-              value={key}
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-cyan-600 text-white"
-            >
-              <span className="mr-2">{category.icon}</span>
-              {category.name}
-            </TabsTrigger>
-          ))}
+          {Object.entries(categoryMap).map(([key, category]) => {
+            const isLoading = isCategoryLoading(key)
+            const hasData = hasCategoryData(key)
+
+            return (
+              <TabsTrigger
+                key={key}
+                value={key}
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-cyan-600 text-white relative"
+              >
+                <span className="mr-2">{category.icon}</span>
+                {category.name}
+                {isLoading && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
+                )}
+                {hasData && !isLoading && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full"></div>
+                )}
+              </TabsTrigger>
+            )
+          })}
         </TabsList>
 
         {Object.entries(categoryMap).map(([categoryKey, category]) => {
           const filteredSources = getFilteredSources(categoryKey)
+          const isLoading = isCategoryLoading(categoryKey)
+          const hasData = hasCategoryData(categoryKey)
 
           return (
             <TabsContent key={categoryKey} value={categoryKey} className="mt-8">
-              {filteredSources.length === 0 ? (
+              {isLoading && !hasData ? (
                 <div className="text-center text-gray-400 py-12">
-                  暂无{category.name}分类数据
+                  <div className="animate-pulse">正在加载 {category.name} 数据...</div>
                 </div>
-              ) : (
+              ) : hasData ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredSources.map((sourceGroup: any, index: number) => (
@@ -237,6 +304,10 @@ export function TrendingPlatforms() {
                     </div>
                   </div>
                 </>
+              ) : (
+                <div className="text-center text-gray-400 py-12">
+                  <div>暂无 {category.name} 数据</div>
+                </div>
               )}
             </TabsContent>
           )

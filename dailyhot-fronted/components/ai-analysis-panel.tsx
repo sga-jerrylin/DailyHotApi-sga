@@ -4,19 +4,62 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Sparkles, TrendingUp, Brain, Zap } from "lucide-react"
+import { Sparkles, TrendingUp, Brain, Zap, Settings } from "lucide-react"
+import { AISettingsDialog } from "./ai-settings-dialog"
+
+interface AISettings {
+  provider: 'deepseek' | 'dify'
+  deepseek: {
+    apiKey: string
+    model: string
+  }
+  dify: {
+    baseUrl: string
+    apiKey: string
+  }
+}
 
 export function AIAnalysisPanel() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisText, setAnalysisText] = useState("")
   const [error, setError] = useState("")
+  const [showSettings, setShowSettings] = useState(false)
+  const [aiSettings, setAiSettings] = useState<AISettings>({
+    provider: 'deepseek',
+    deepseek: {
+      apiKey: '',
+      model: 'deepseek-chat'
+    },
+    dify: {
+      baseUrl: '',
+      apiKey: ''
+    }
+  })
 
-  // DeepSeek API配置
-  const DEEPSEEK_API_KEY = "sk-ea98b5da86954ddcaa2ff10e5bbba2b4"
-  const DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+  // 从localStorage加载设置
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('ai-settings')
+    if (savedSettings) {
+      try {
+        setAiSettings(JSON.parse(savedSettings))
+      } catch (error) {
+        console.error('Failed to load AI settings:', error)
+      }
+    }
+  }, [])
 
-  // 获取热点数据并调用DeepSeek分析
+  // 获取热点数据并调用AI分析
   const startAnalysis = async (analysisType: string = 'all') => {
+    // 检查API配置
+    if (aiSettings.provider === 'deepseek' && !aiSettings.deepseek.apiKey) {
+      setError("请先在设置中配置DeepSeek API Key")
+      return
+    }
+    if (aiSettings.provider === 'dify' && (!aiSettings.dify.baseUrl || !aiSettings.dify.apiKey)) {
+      setError("请先在设置中配置Dify Base URL和API Key")
+      return
+    }
+
     setIsAnalyzing(true)
     setAnalysisText("")
     setError("")
@@ -33,6 +76,8 @@ export function AIAnalysisPanel() {
         apiUrl = `${apiBase}/aggregate?group=category&category=finance&per=10`
       } else if (analysisType === 'news') {
         apiUrl = `${apiBase}/aggregate?group=category&category=news&per=10`
+      } else if (analysisType === 'media') {
+        apiUrl = `${apiBase}/aggregate?group=category&category=media&per=10`
       }
 
       const response = await fetch(apiUrl)
@@ -45,8 +90,8 @@ export function AIAnalysisPanel() {
       // 2. 构建分析提示词
       const prompt = buildAnalysisPromptFromAggregate(hotData.categories, analysisType)
 
-      // 3. 调用DeepSeek API进行流式分析
-      await callDeepSeekAPI(prompt)
+      // 3. 调用AI API进行流式分析
+      await callAIAPI(prompt)
 
     } catch (err) {
       setError(err instanceof Error ? err.message : "分析失败")
@@ -60,7 +105,8 @@ export function AIAnalysisPanel() {
       'all': '全网热点',
       'tech': '科技新闻',
       'finance': '财经',
-      'news': '实时新闻'
+      'news': '实时新闻',
+      'media': '新媒体'
     }
 
     const analysisTypeName = analysisTypeMap[analysisType as keyof typeof analysisTypeMap] || '全网热点'
@@ -112,6 +158,13 @@ export function AIAnalysisPanel() {
 🔥 舆情趋势分析 - 评估公众对重要事件的反应和情绪
 ⚡ 突发事件监控 - 识别可能产生重大影响的突发新闻
 📊 传播影响评估 - 分析新闻事件的传播范围和社会影响`
+    } else if (analysisType === 'media') {
+      analysisRequirements = `
+📱 新媒体热点分析 - 识别社交媒体和内容平台的热门话题
+🎬 内容趋势追踪 - 分析短视频、直播、社区讨论的流行趋势
+👥 用户行为洞察 - 分析用户互动模式和兴趣偏好变化
+🔥 病毒传播分析 - 识别具有病毒传播潜力的内容和话题
+📈 平台生态观察 - 分析不同新媒体平台的内容生态和用户特征`
     } else {
       analysisRequirements = `
 🔥 热点共性分析 - 找出跨平台、跨领域的共同话题和趋势
@@ -139,17 +192,30 @@ ${analysisRequirements}
     return prompt
   }
 
+  // 调用AI API进行流式分析
+  const callAIAPI = async (prompt: string) => {
+    try {
+      if (aiSettings.provider === 'deepseek') {
+        await callDeepSeekAPI(prompt)
+      } else if (aiSettings.provider === 'dify') {
+        await callDifyAPI(prompt)
+      }
+    } catch (error) {
+      throw error
+    }
+  }
+
   // 调用DeepSeek API进行流式分析
   const callDeepSeekAPI = async (prompt: string) => {
     try {
-      const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Authorization': `Bearer ${aiSettings.deepseek.apiKey}`,
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: aiSettings.deepseek.model,
           messages: [
             {
               role: 'system',
@@ -170,43 +236,110 @@ ${analysisRequirements}
         throw new Error(`DeepSeek API错误: ${response.status}`)
       }
 
-      // 处理流式响应
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
+      await processStreamResponse(response)
+    } catch (err) {
+      throw new Error(`DeepSeek API调用失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    }
+  }
 
-      if (!reader) {
-        throw new Error("无法读取响应流")
+  // 调用Dify API进行流式分析
+  const callDifyAPI = async (prompt: string) => {
+    try {
+      const response = await fetch(`${aiSettings.dify.baseUrl}/chat-messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${aiSettings.dify.apiKey}`,
+        },
+        body: JSON.stringify({
+          inputs: {},
+          query: prompt,
+          response_mode: 'streaming',
+          user: 'sga-user',
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Dify API错误: ${response.status}`)
       }
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      await processDifyStreamResponse(response)
+    } catch (err) {
+      throw new Error(`Dify API调用失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    }
+  }
 
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n')
+  // 处理DeepSeek流式响应
+  const processStreamResponse = async (response: Response) => {
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') {
-              setIsAnalyzing(false)
-              return
+    if (!reader) {
+      throw new Error("无法读取响应流")
+    }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value)
+      const lines = chunk.split('\n')
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6)
+          if (data === '[DONE]') {
+            setIsAnalyzing(false)
+            return
+          }
+
+          try {
+            const parsed = JSON.parse(data)
+            const content = parsed.choices?.[0]?.delta?.content
+            if (content) {
+              setAnalysisText(prev => prev + content)
             }
-
-            try {
-              const parsed = JSON.parse(data)
-              const content = parsed.choices?.[0]?.delta?.content
-              if (content) {
-                setAnalysisText(prev => prev + content)
-              }
-            } catch (e) {
-              // 忽略解析错误，继续处理下一行
-            }
+          } catch {
+            // 忽略解析错误，继续处理下一行
           }
         }
       }
-    } catch (err) {
-      throw new Error(`API调用失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    }
+  }
+
+  // 处理Dify流式响应
+  const processDifyStreamResponse = async (response: Response) => {
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+
+    if (!reader) {
+      throw new Error("无法读取响应流")
+    }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value)
+      const lines = chunk.split('\n')
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6)
+
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed.event === 'message' && parsed.answer) {
+              setAnalysisText(prev => prev + parsed.answer)
+            } else if (parsed.event === 'message_end') {
+              setIsAnalyzing(false)
+              return
+            }
+          } catch {
+            // 忽略解析错误，继续处理下一行
+          }
+        }
+      }
     }
   }
 
@@ -225,14 +358,25 @@ ${analysisRequirements}
                   <p className="text-gray-400 text-sm mt-1">实时智能分析78个数据源热点趋势</p>
                 </div>
               </div>
-              <Badge variant="outline" className="border-cyan-500/50 bg-cyan-500/10 text-cyan-300">
-                <Sparkles className="h-3 w-3 mr-1" />
-                AI驱动
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="border-cyan-500/50 bg-cyan-500/10 text-cyan-300">
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  AI驱动
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSettings(true)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-800/50 h-8 px-3"
+                >
+                  <Settings className="h-3 w-3 mr-1" />
+                  设置
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               <Button
                 onClick={() => startAnalysis('all')}
                 disabled={isAnalyzing}
@@ -304,6 +448,24 @@ ${analysisRequirements}
                   </>
                 )}
               </Button>
+
+              <Button
+                onClick={() => startAnalysis('media')}
+                disabled={isAnalyzing}
+                className="bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 transition-all duration-300 h-12"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Zap className="h-4 w-4 mr-2 animate-spin" />
+                    分析中...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    新媒体分析
+                  </>
+                )}
+              </Button>
             </div>
 
             {error && (
@@ -335,6 +497,14 @@ ${analysisRequirements}
           </CardContent>
         </Card>
       </div>
+
+      {/* AI设置对话框 */}
+      <AISettingsDialog
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        onSave={setAiSettings}
+        currentSettings={aiSettings}
+      />
     </div>
   )
 }

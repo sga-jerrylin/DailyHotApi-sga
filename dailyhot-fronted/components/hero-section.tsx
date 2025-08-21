@@ -136,21 +136,7 @@ export function HeroSection() {
             </p>
           </div>
 
-          <div className="flex items-center justify-center gap-x-8 pt-4">
-            <Button
-              size="lg"
-              className="bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 text-white px-10 py-4 text-lg shadow-2xl shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all duration-300 border border-cyan-400/30"
-            >
-              开始探索
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="border-gray-500 text-gray-300 hover:bg-gray-800/50 px-10 py-4 text-lg bg-transparent backdrop-blur-sm hover:border-cyan-400/50 transition-all duration-300"
-            >
-              AI分析报告
-            </Button>
-          </div>
+
         </div>
       </div>
     </div>
